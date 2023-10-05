@@ -575,30 +575,82 @@ int main(int argc, char *argv[]) {
 /***************************************************************/
 
 
-void eval_micro_sequencer() {
-
   /* 
    * Evaluate the address of the next state according to the 
    * micro sequencer logic. Latch the next microinstruction.
    */
+void eval_micro_sequencer() {
 
+  //IRD[0]
+  if(GetIRD(CURRENT_LATCHES.MICROINSTRUCTION)==0){
+    switch(GetCOND(CURRENT_LATCHES.MICROINSTRUCTION)){
+        //COND[0], COND[1]
+        case 0b01:{
+            if(CURRENT_LATCHES.READY == TRUE){
+                NEXT_LATCHES.STATE_NUMBER = GetJ(CURRENT_LATCHES.MICROINSTRUCTION) | 0x2;
+            }else{
+                NEXT_LATCHES.STATE_NUMBER = GetJ(CURRENT_LATCHES.MICROINSTRUCTION);
+            }
+            break;
+        }
+        case 0b10:{
+            if(CURRENT_LATCHES.BEN == TRUE){
+               NEXT_LATCHES.STATE_NUMBER = GetJ(CURRENT_LATCHES.MICROINSTRUCTION) | 0x4; 
+            }
+            else{
+                NEXT_LATCHES.STATE_NUMBER = GetJ(CURRENT_LATCHES.MICROINSTRUCTION);
+            }
+            break;
+        }
+        case 0b11:{
+            if((CURRENT_LATCHES.IR & 0x0800) == 0x0800){
+                NEXT_LATCHES.STATE_NUMBER = GetJ(CURRENT_LATCHES.MICROINSTRUCTION) | 0x1;
+            }
+            else{
+                NEXT_LATCHES.STATE_NUMBER = GetJ(CURRENT_LATCHES.MICROINSTRUCTION);
+            }
+            break;
+        }
+        default:{ 
+            NEXT_LATCHES.STATE_NUMBER = GetJ(CURRENT_LATCHES.MICROINSTRUCTION);
+            break;
+        }
+    }
+  }
 }
 
+#define READ 0
+#define WRITE 1
 
-void cycle_memory() {
- 
   /* 
    * This function emulates memory and the WE logic. 
    * Keep track of which cycle of MEMEN we are dealing with.  
    * If fourth, we need to latch Ready bit at the end of 
    * cycle to prepare microsequencer for the fifth cycle.  
    */
+void cycle_memory() { 
+    //track current memory cycle
+    static int mem_cycle = 0;
+    if(GetMIO_EN(CURRENT_LATCHES.MICROINSTRUCTION) == TRUE){
+        if(mem_cycle == 4){
+            NEXT_LATCHES.READY = TRUE;
+            int read_write = GetR_W(CURRENT_LATCHES.MICROINSTRUCTION);
+            switch(read_write){
+                case READ:{
+                   
+                }
+                case WRITE:{
 
+                }
+            }
+        }
+        mem_cycle++;
+    }
 }
 
 
-
 void eval_bus_drivers() {
+
 
   /* 
    * Datapath routine emulating operations before driving the bus.
