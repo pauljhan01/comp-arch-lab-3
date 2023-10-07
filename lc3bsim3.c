@@ -574,56 +574,183 @@ int main(int argc, char *argv[]) {
    Begin your code here 	  			       */
 /***************************************************************/
 
-
-void eval_micro_sequencer() {
+void copy_microinstruction();
 
   /* 
    * Evaluate the address of the next state according to the 
    * micro sequencer logic. Latch the next microinstruction.
    */
+void eval_micro_sequencer() {
 
+  //IRD[0]
+  if(GetIRD(CURRENT_LATCHES.MICROINSTRUCTION)==0){
+    switch(GetCOND(CURRENT_LATCHES.MICROINSTRUCTION)){
+        //COND[0], COND[1]
+        case 0b01:{
+            if(CURRENT_LATCHES.READY == TRUE){
+                NEXT_LATCHES.STATE_NUMBER = GetJ(CURRENT_LATCHES.MICROINSTRUCTION) | 0x2;
+                copy_microinstruction();
+            }else{
+                NEXT_LATCHES.STATE_NUMBER = GetJ(CURRENT_LATCHES.MICROINSTRUCTION);
+                copy_microinstruction();
+            }
+            break;
+        }
+        case 0b10:{
+            if(CURRENT_LATCHES.BEN == TRUE){
+               NEXT_LATCHES.STATE_NUMBER = GetJ(CURRENT_LATCHES.MICROINSTRUCTION) | 0x4; 
+               copy_microinstruction();
+            }
+            else{
+                NEXT_LATCHES.STATE_NUMBER = GetJ(CURRENT_LATCHES.MICROINSTRUCTION);
+                copy_microinstruction();
+            }
+            break;
+        }
+        case 0b11:{
+            if((CURRENT_LATCHES.IR & 0x0800) == 0x0800){
+                NEXT_LATCHES.STATE_NUMBER = GetJ(CURRENT_LATCHES.MICROINSTRUCTION) | 0x1;
+                copy_microinstruction();
+            }
+            else{
+                NEXT_LATCHES.STATE_NUMBER = GetJ(CURRENT_LATCHES.MICROINSTRUCTION);
+                copy_microinstruction();
+            }
+            break;
+        }
+        default:{ 
+            NEXT_LATCHES.STATE_NUMBER = GetJ(CURRENT_LATCHES.MICROINSTRUCTION);
+            copy_microinstruction();
+            break;
+        }
+    }
+  }
+  else{
+    NEXT_LATCHES.STATE_NUMBER = (CURRENT_LATCHES.IR & 0x0000F000) >> 12;
+    copy_microinstruction();
+  }
 }
 
+#define READ 0
+#define WRITE 1
 
-void cycle_memory() {
- 
   /* 
    * This function emulates memory and the WE logic. 
    * Keep track of which cycle of MEMEN we are dealing with.  
    * If fourth, we need to latch Ready bit at the end of 
    * cycle to prepare microsequencer for the fifth cycle.  
    */
-
+void cycle_memory() { 
+    //track current memory cycle
+    static int mem_cycle = 0;
+    if(mem_cycle == 4){
+        mem_cycle = 0;
+    }
+    if(GetMIO_EN(CURRENT_LATCHES.MICROINSTRUCTION) == TRUE){
+        if(mem_cycle == 3){
+            NEXT_LATCHES.READY = TRUE;
+            int read_write = GetR_W(CURRENT_LATCHES.MICROINSTRUCTION);
+            switch(read_write){
+                case READ:{
+                    CURRENT_LATCHES.MDR = Low16bits((MEMORY[CURRENT_LATCHES.MAR][1] << 8));
+                    CURRENT_LATCHES.MDR = CURRENT_LATCHES.MDR | (MEMORY[CURRENT_LATCHES.MAR][0] & 0x00FF);
+                }
+                case WRITE:{
+                    int write_size = GetDATA_SIZE(CURRENT_LATCHES.MICROINSTRUCTION);
+                    if(write_size == 1){
+                        MEMORY[CURRENT_LATCHES.MAR][0] = Low16bits(CURRENT_LATCHES.MDR & 0x00FF);
+                        //Left shift 8 bits since byte addressable
+                        MEMORY[CURRENT_LATCHES.MAR][1] = Low16bits((CURRENT_LATCHES.MDR & 0x0000FF00) >> 8);
+                    }
+                    //write size is one byte and MAR[0] so low byte of word of memory
+                    else if((CURRENT_LATCHES.MAR & 0x0001) == 0){
+                        MEMORY[CURRENT_LATCHES.MAR][0] = Low16bits(CURRENT_LATCHES.MDR & 0x00FF);
+                    }
+                    //write size is one byte and MAR[1] so high byte of word of memory
+                    else{
+                        MEMORY[CURRENT_LATCHES.MAR][1] = Low16bits((CURRENT_LATCHES.MDR & 0x0000FF00) >> 8);
+                    }
+                }
+            }
+        }
+        mem_cycle++;
+    }
 }
-
-
-
-void eval_bus_drivers() {
 
   /* 
    * Datapath routine emulating operations before driving the bus.
    * Evaluate the input of tristate drivers 
-   *             Gate_MARMUX,
+   *         Gate_MARMUX,
    *		 Gate_PC,
    *		 Gate_ALU,
    *		 Gate_SHF,
    *		 Gate_MDR.
    */    
+void eval_bus_drivers() {
+    if(GetGATE_MARMUX(CURRENT_LATCHES.MICROINSTRUCTION)){
+        __uint16_t marmux_output = 0;
+        switch(GetMARMUX(CURRENT_LATCHES.MICROINSTRUCTION)){
+            case 0:{
+                marmux_output = CURRENT_LATCHES.IR & 0x00FF;
+                marmux_output = marmux_output << 1;
+                BUS = Low16bits(marmux_output);
+                break;
+            }
+            case 1:{
+                int addr2_output = 0;
+                switch(GetADDR2MUX(CURRENT_LATCHES.MICROINSTRUCTION)){
+                    case 0:{
+                        addr2_output = 0;
+                        break;
+                    }
+                    case 1:{
+                        addr2_output = CURRENT_LATCHES.IR & 0x003F;
+                        addr2_output = Low16bits(addr2_output);
+                        if(GetLSHF1(CURRENT_LATCHES.MICROINSTRUCTION)){
+                           addr2_output = addr2_output << 1; 
+                        }
+                        break;
+                    }
+                    case 2:{
+                        addr2_output = CURRENT_LATCHES.IR & 0x01FF;
+                        addr2_output = Low16bits(addr2_output);
+                        if(GetLSHF1(CURRENT_LATCHES.MICROINSTRUCTION)){
+                           addr2_output = addr2_output << 1; 
+                        }
+                        break;
+                    }
+                    case 3:{
+                        addr2_output = CURRENT_LATCHES.IR & 0x3FFF;
+                        addr2_output = Low16bits(addr2_output);
+                        if(GetLSHF1(CURRENT_LATCHES.MICROINSTRUCTION)){
+                           addr2_output = addr2_output << 1; 
+                        }
+                        break;
+                    }
+                }
 
+                break;
+            }
+        }
+    }else if(GetGATE_ALU(CURRENT_LATCHES.MICROINSTRUCTION)){
+        
+    }else if(GetGATE_MDR(CURRENT_LATCHES.MICROINSTRUCTION)){
+        BUS = Low16bits(CURRENT_LATCHES.MDR);
+    }else if(GetGATE_PC(CURRENT_LATCHES.MICROINSTRUCTION)){
+
+    }else{
+    };
 }
 
-
-void drive_bus() {
 
   /* 
    * Datapath routine for driving the bus from one of the 5 possible 
    * tristate drivers. 
    */       
+void drive_bus() {
 
 }
 
-
-void latch_datapath_values() {
 
   /* 
    * Datapath routine for computing all functions that need to latch
@@ -631,5 +758,12 @@ void latch_datapath_values() {
    * require sourcing the bus; therefore, this routine has to come 
    * after drive_bus.
    */       
+void latch_datapath_values() {
 
+}
+
+void copy_microinstruction(){
+    for(int i = 0; i < 35; i++){
+        NEXT_LATCHES.MICROINSTRUCTION[i] = CONTROL_STORE[NEXT_LATCHES.STATE_NUMBER][i];
+    }
 }
