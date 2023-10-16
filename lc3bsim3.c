@@ -771,11 +771,13 @@ void eval_bus_drivers() {
                     break;
                 }
                 case 1:{
-                    int base_reg_idx = CURRENT_LATCHES.IR & 0x01C0;
-                    base_reg_idx = base_reg_idx >> 6;
-                    addr1_result = CURRENT_LATCHES.REGS[base_reg_idx];
-                    addr1_result = Low16bits(addr1_result);
-                    break;
+                    if(GetSR1MUX(CURRENT_LATCHES.MICROINSTRUCTION)){
+                        int base_reg_idx = CURRENT_LATCHES.IR & 0x01C0;
+                        base_reg_idx = base_reg_idx >> 6;
+                        addr1_result = CURRENT_LATCHES.REGS[base_reg_idx];
+                        addr1_result = Low16bits(addr1_result);
+                        break;
+                    }
                 }
             }
             BUS = Low16bits(addr1_result + addr2_result);
@@ -1018,6 +1020,13 @@ void drive_bus() {
         if(GetLD_MAR(CURRENT_LATCHES.MICROINSTRUCTION)==1){
             NEXT_LATCHES.MAR = Low16bits(BUS);
             load_signals[ldmar] = TRUE;
+        }
+        if(GetLD_REG(CURRENT_LATCHES.MICROINSTRUCTION)==1){
+            if(GetDRMUX(CURRENT_LATCHES.MICROINSTRUCTION)==0){
+                int dr_idx = CURRENT_LATCHES.IR & 0x0E00;
+                dr_idx = dr_idx >> 9;
+                NEXT_LATCHES.REGS[dr_idx] = Low16bits(BUS);
+            }
         }
     }
     else if(GetGATE_SHF(CURRENT_LATCHES.MICROINSTRUCTION)==1){
