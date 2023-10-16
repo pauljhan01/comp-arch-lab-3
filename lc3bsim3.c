@@ -725,120 +725,86 @@ void cycle_memory() {
    *		 Gate_SHF,
    *		 Gate_MDR.
    */    
-void eval_gate_marmux();
-void eval_gate_alu();
-void eval_gate_mdr();
-void eval_gate_pc();
-void eval_gate_shf();
-void eval_gate_marmux(){
-    int marmux = GetMARMUX(CURRENT_LATCHES.MICROINSTRUCTION);
-    if(marmux){
-        __uint16_t immediate = 0;
-        immediate = CURRENT_LATCHES.IR & 0x00FF;
-        immediate = immediate << 1;
-        BUS = Low16bits(immediate);
-        return;
-    }
-    int left_shift = GetLSHF1(CURRENT_LATCHES.MICROINSTRUCTION);
-    __int16_t addr2_result = 0;
-    __int16_t addr1_result = 0;
-    switch(GetADDR2MUX(CURRENT_LATCHES.MICROINSTRUCTION)){
-        case 0:{
-            addr2_result = 0;
-            break;
+void eval_bus_drivers() {
+    
+    if(GetGATE_MARMUX(CURRENT_LATCHES.MICROINSTRUCTION)){
+        if(GetMARMUX(CURRENT_LATCHES.MICROINSTRUCTION)==0){
+            __uint16_t immediate = 0;
+            immediate = CURRENT_LATCHES.IR & 0x00FF;
+            immediate = immediate << 1;
+            BUS = Low16bits(immediate);
         }
-        case 1:{
-            addr2_result = CURRENT_LATCHES.IR & 0x003F;
-            addr2_result = sign_extend(addr2_result, 6);
-            addr2_result = Low16bits(addr2_result);
-            break; 
-        }
-        case 2:{
-            addr2_result = CURRENT_LATCHES.IR & 0x01FF;
-            addr2_result = sign_extend(addr2_result, 9);
-            addr2_result = Low16bits(addr2_result);
-            break;
-        }
-        case 3:{
-            addr2_result = CURRENT_LATCHES.IR & 0x07FF;
-            addr2_result = sign_extend(addr2_result, 12);
-            addr2_result = Low16bits(addr2_result);
-            break;
-        }
-    }
-    if(left_shift){
-        addr2_result = addr2_result << 1;
-    }
-    switch(GetADDR1MUX(CURRENT_LATCHES.MICROINSTRUCTION)){
-        case 0:{
-            addr1_result = CURRENT_LATCHES.PC;
-            addr1_result = Low16bits(addr1_result);
-            break;
-        }
-        case 1:{
-            int base_reg_idx = CURRENT_LATCHES.IR & 0x01C0;
-            base_reg_idx = base_reg_idx >> 6;
-            addr1_result = CURRENT_LATCHES.REGS[base_reg_idx];
-            addr1_result = Low16bits(addr1_result);
-            break;
-        }
-    }
-    BUS = Low16bits(addr1_result + addr2_result);
-}
-void eval_gate_alu(){
-    int sr1 = 0;
-    int sr2 = 0;
-    int immediate = 0;
-    int aluk = GetALUK(CURRENT_LATCHES.MICROINSTRUCTION);
-    int sr1_mux = GetSR1MUX(CURRENT_LATCHES.MICROINSTRUCTION);
-    if(sr1_mux){
-        sr1 = (CURRENT_LATCHES.IR & 0x01C0) >> 6;
-        if((CURRENT_LATCHES.IR & 0x0020) == 0){
-            sr2 = (CURRENT_LATCHES.IR & 0x0007);
-            int result = 0;
-            switch(aluk){
+        else{
+            __int16_t addr2_result = 0;
+            __int16_t addr1_result = 0;
+            switch(GetADDR2MUX(CURRENT_LATCHES.MICROINSTRUCTION)){
                 case 0:{
-                    result = CURRENT_LATCHES.REGS[sr1] + CURRENT_LATCHES.REGS[sr2];
-                    result = Low16bits(result);
-                    BUS = result;
+                    addr2_result = 0;
                     break;
                 }
                 case 1:{
-                    result = CURRENT_LATCHES.REGS[sr1] & CURRENT_LATCHES.REGS[sr2];
-                    result = Low16bits(result);
-                    BUS = result;
-                    break;
+                    addr2_result = CURRENT_LATCHES.IR & 0x003F;
+                    addr2_result = sign_extend(addr2_result, 6);
+                    addr2_result = Low16bits(addr2_result);
+                    break; 
                 }
                 case 2:{
-                    result = CURRENT_LATCHES.REGS[sr1] ^ CURRENT_LATCHES.REGS[sr2];
-                    result = Low16bits(result);
-                    BUS = result;
+                    addr2_result = CURRENT_LATCHES.IR & 0x01FF;
+                    addr2_result = sign_extend(addr2_result, 9);
+                    addr2_result = Low16bits(addr2_result);
                     break;
                 }
-                default:{
-                    printf("error in control code for ALUK");
+                case 3:{
+                    addr2_result = CURRENT_LATCHES.IR & 0x07FF;
+                    addr2_result = sign_extend(addr2_result, 12);
+                    addr2_result = Low16bits(addr2_result);
                     break;
                 }
+            }
+            if(GetLSHF1(CURRENT_LATCHES.MICROINSTRUCTION)==1){
+                addr2_result = addr2_result << 1;
+            }
+            switch(GetADDR1MUX(CURRENT_LATCHES.MICROINSTRUCTION)){
+                case 0:{
+                    addr1_result = CURRENT_LATCHES.PC;
+                    addr1_result = Low16bits(addr1_result);
+                    break;
+                }
+                case 1:{
+                    int base_reg_idx = CURRENT_LATCHES.IR & 0x01C0;
+                    base_reg_idx = base_reg_idx >> 6;
+                    addr1_result = CURRENT_LATCHES.REGS[base_reg_idx];
+                    addr1_result = Low16bits(addr1_result);
+                    break;
+                }
+            }
+            BUS = Low16bits(addr1_result + addr2_result);
         }
-        }else{
-            immediate = (CURRENT_LATCHES.IR & 0x001F);
-            immediate = sign_extend(immediate, 5);
-            int result = 0;
+    }else if(GetGATE_ALU(CURRENT_LATCHES.MICROINSTRUCTION)){
+        int sr1 = 0;
+        int sr2 = 0;
+        int immediate = 0;
+        int aluk = GetALUK(CURRENT_LATCHES.MICROINSTRUCTION);
+        if(GetSR1MUX(CURRENT_LATCHES.MICROINSTRUCTION)){
+            sr1 = (CURRENT_LATCHES.IR & 0x01C0) >> 6;
+            if((CURRENT_LATCHES.IR & 0x0020) == 0){
+                sr2 = (CURRENT_LATCHES.IR & 0x0007);
+                int result = 0;
                 switch(aluk){
                     case 0:{
-                        result = CURRENT_LATCHES.REGS[sr1] + immediate;
+                        result = CURRENT_LATCHES.REGS[sr1] + CURRENT_LATCHES.REGS[sr2];
                         result = Low16bits(result);
                         BUS = result;
                         break;
                     }
                     case 1:{
-                        result = CURRENT_LATCHES.REGS[sr1] & immediate;
+                        result = CURRENT_LATCHES.REGS[sr1] & CURRENT_LATCHES.REGS[sr2];
                         result = Low16bits(result);
                         BUS = result;
                         break;
                     }
                     case 2:{
-                        result = CURRENT_LATCHES.REGS[sr1] ^ immediate;
+                        result = CURRENT_LATCHES.REGS[sr1] ^ CURRENT_LATCHES.REGS[sr2];
                         result = Low16bits(result);
                         BUS = result;
                         break;
@@ -848,357 +814,136 @@ void eval_gate_alu(){
                         break;
                     }
             }
+            }else{
+                immediate = (CURRENT_LATCHES.IR & 0x001F);
+                immediate = sign_extend(immediate, 5);
+                int result = 0;
+                    switch(aluk){
+                        case 0:{
+                            result = CURRENT_LATCHES.REGS[sr1] + immediate;
+                            result = Low16bits(result);
+                            BUS = result;
+                            break;
+                        }
+                        case 1:{
+                            result = CURRENT_LATCHES.REGS[sr1] & immediate;
+                            result = Low16bits(result);
+                            BUS = result;
+                            break;
+                        }
+                        case 2:{
+                            result = CURRENT_LATCHES.REGS[sr1] ^ immediate;
+                            result = Low16bits(result);
+                            BUS = result;
+                            break;
+                        }
+                        default:{
+                            printf("error in control code for ALUK");
+                            break;
+                        }
+                }
+            }
+
         }
-    }
-    else{
-        sr1 = (CURRENT_LATCHES.IR & 0x0E00) >> 9;
-        BUS = CURRENT_LATCHES.REGS[sr1];
-    }
-}
-void eval_gate_mdr(){
-    if((CURRENT_LATCHES.MAR & 0x1) == 1){
-        if(GetDATA_SIZE(CURRENT_LATCHES.MICROINSTRUCTION)==0){
-            int temp = sign_extend((CURRENT_LATCHES.MDR & 0xFF00) >> 8, 8);
-            BUS = Low16bits(temp);
+        else{
+            sr1 = (CURRENT_LATCHES.IR & 0x0E00) >> 9;
+            BUS = CURRENT_LATCHES.REGS[sr1];
         }
-    }else{
-        if(GetDATA_SIZE(CURRENT_LATCHES.MICROINSTRUCTION)==0){
-            int temp = sign_extend(CURRENT_LATCHES.MDR & 0x00FF, 8);
-            BUS = Low16bits(temp);
+
+    }else if(GetGATE_MDR(CURRENT_LATCHES.MICROINSTRUCTION)){
+        if((CURRENT_LATCHES.MAR & 0x1) == 1){
+            if(GetDATA_SIZE(CURRENT_LATCHES.MICROINSTRUCTION)==0){
+                int temp = sign_extend((CURRENT_LATCHES.MDR & 0xFF00) >> 8, 8);
+                BUS = Low16bits(temp);
+            }
         }else{
-            BUS = Low16bits(CURRENT_LATCHES.MDR);
+            if(GetDATA_SIZE(CURRENT_LATCHES.MICROINSTRUCTION)==0){
+                int temp = sign_extend(CURRENT_LATCHES.MDR & 0x00FF, 8);
+                BUS = Low16bits(temp);
+            }else{
+                BUS = Low16bits(CURRENT_LATCHES.MDR);
+            }
         }
-    }
-}
-void eval_gate_pc(){
-    __uint8_t pc_mux = GetPCMUX(CURRENT_LATCHES.MICROINSTRUCTION);
-    int addr1_result = 0;
-    int addr2_result = 0;
-    if(pc_mux == 2 && GetDRMUX(CURRENT_LATCHES.MICROINSTRUCTION) != 1){
-        switch(GetADDR2MUX(CURRENT_LATCHES.MICROINSTRUCTION)){
+    }else if(GetGATE_PC(CURRENT_LATCHES.MICROINSTRUCTION)){
+
+        __uint8_t pc_mux = GetPCMUX(CURRENT_LATCHES.MICROINSTRUCTION);
+        int addr1_result = 0;
+        int addr2_result = 0;
+        if(pc_mux == 2 && GetDRMUX(CURRENT_LATCHES.MICROINSTRUCTION) != 1){
+            switch(GetADDR2MUX(CURRENT_LATCHES.MICROINSTRUCTION)){
+                case 0:{
+                    addr2_result = 0;
+                    break;
+                }
+                case 1:{
+                    addr2_result = CURRENT_LATCHES.IR & 0x003F;
+                    addr2_result = sign_extend(addr2_result, 6);
+                    addr2_result = Low16bits(addr2_result);
+                    break; 
+                }
+                case 2:{
+                    addr2_result = CURRENT_LATCHES.IR & 0x01FF;
+                    addr2_result = sign_extend(addr2_result, 9);
+                    addr2_result = Low16bits(addr2_result);
+                    break;
+                }
+                case 3:{
+                    addr2_result = CURRENT_LATCHES.IR & 0x07FF;
+                    addr2_result = sign_extend(addr2_result, 11);
+                    addr2_result = Low16bits(addr2_result);
+                    break;
+                }
+            }
+            if(GetLSHF1(CURRENT_LATCHES.MICROINSTRUCTION)==1){
+                addr2_result = addr2_result << 1;
+            }
+            switch(GetADDR1MUX(CURRENT_LATCHES.MICROINSTRUCTION)){
+                case 0:{
+                    addr1_result = CURRENT_LATCHES.PC;
+                    addr1_result = Low16bits(addr1_result);
+                    break;
+                }
+                case 1:{
+                    int base_reg_idx = CURRENT_LATCHES.IR & 0x01C0;
+                    base_reg_idx = base_reg_idx >> 6;
+                    addr1_result = CURRENT_LATCHES.REGS[base_reg_idx];
+                    addr1_result = Low16bits(addr1_result);
+                    break;
+                }
+            }
+            BUS = Low16bits(addr1_result + addr2_result);
+        }else{
+            BUS = Low16bits(CURRENT_LATCHES.PC);
+        }
+        
+    }else if(GetGATE_SHF(CURRENT_LATCHES.MICROINSTRUCTION)==1){
+        __uint16_t type_shift = CURRENT_LATCHES.IR & 0x0030;
+        type_shift = type_shift >> 4;
+        __uint8_t immediate = CURRENT_LATCHES.IR & 0x000F;
+        int sr1 = CURRENT_LATCHES.IR & 0x01C0;
+        sr1 = sr1 >> 6;
+        switch(type_shift){
             case 0:{
-                addr2_result = 0;
+                __int16_t val = CURRENT_LATCHES.REGS[sr1] << immediate;
+                val = Low16bits(val);
+                BUS = val;
                 break;
             }
             case 1:{
-                addr2_result = CURRENT_LATCHES.IR & 0x003F;
-                addr2_result = sign_extend(addr2_result, 6);
-                addr2_result = Low16bits(addr2_result);
-                break; 
-            }
-            case 2:{
-                addr2_result = CURRENT_LATCHES.IR & 0x01FF;
-                addr2_result = sign_extend(addr2_result, 9);
-                addr2_result = Low16bits(addr2_result);
+                __uint16_t val = CURRENT_LATCHES.REGS[sr1] >> immediate;
+                val = Low16bits(val);
+                BUS = val;
                 break;
             }
             case 3:{
-                addr2_result = CURRENT_LATCHES.IR & 0x07FF;
-                addr2_result = sign_extend(addr2_result, 11);
-                addr2_result = Low16bits(addr2_result);
+                __int16_t val = sign_extend(CURRENT_LATCHES.REGS[sr1],16) >> immediate;
+                val = Low16bits(val);
+                BUS = val;
+                BUS = Low16bits(BUS);
                 break;
             }
         }
-        if(GetLSHF1(CURRENT_LATCHES.MICROINSTRUCTION)==1){
-            addr2_result = addr2_result << 1;
-        }
-        switch(GetADDR1MUX(CURRENT_LATCHES.MICROINSTRUCTION)){
-            case 0:{
-                addr1_result = CURRENT_LATCHES.PC;
-                addr1_result = Low16bits(addr1_result);
-                break;
-            }
-            case 1:{
-                int base_reg_idx = CURRENT_LATCHES.IR & 0x01C0;
-                base_reg_idx = base_reg_idx >> 6;
-                addr1_result = CURRENT_LATCHES.REGS[base_reg_idx];
-                addr1_result = Low16bits(addr1_result);
-                break;
-            }
-        }
-        BUS = Low16bits(addr1_result + addr2_result);
-    }else{
-        BUS = Low16bits(CURRENT_LATCHES.PC);
-    }
-}
-void eval_gate_shf(){
-    __uint16_t type_shift = CURRENT_LATCHES.IR & 0x0030;
-    type_shift = type_shift >> 4;
-    __uint8_t immediate = CURRENT_LATCHES.IR & 0x000F;
-    int sr1 = CURRENT_LATCHES.IR & 0x01C0;
-    sr1 = sr1 >> 6;
-    switch(type_shift){
-        case 0:{
-            __int16_t val = CURRENT_LATCHES.REGS[sr1] << immediate;
-            val = Low16bits(val);
-            BUS = val;
-            break;
-        }
-        case 1:{
-            __uint16_t val = CURRENT_LATCHES.REGS[sr1] >> immediate;
-            val = Low16bits(val);
-            BUS = val;
-            break;
-        }
-        case 3:{
-            __int16_t val = sign_extend(CURRENT_LATCHES.REGS[sr1],16) >> immediate;
-            val = Low16bits(val);
-            BUS = val;
-            BUS = Low16bits(BUS);
-            break;
-        }
-    }
-}
-void eval_bus_drivers() {
-    int gate_marmux = GetGATE_MARMUX(CURRENT_LATCHES.MICROINSTRUCTION);
-    int gate_alu = GetGATE_ALU(CURRENT_LATCHES.MICROINSTRUCTION);
-    int gate_mdr = GetGATE_MDR(CURRENT_LATCHES.MICROINSTRUCTION);
-    int gate_pc = GetGate_PC(CURRENT_LATCHES.MICROINSTRUCTION);
-    int gate_shf = GetGATE_SHF(CURRENT_LATCHES.MICROINSTRUCTION);
-
-    if(gate_marmux){
-        eval_gate_marmux();
-        return;
-    }
-    if(gate_mdr){
-        eval_gate_mdr();
-        return;
-    }
-    if(gate_alu){
-        eval_gate_alu();
-        return;
-    }
-    if(gate_pc){
-        eval_gate_pc();
-        return;
-    }
-    if(gate_shf){
-        eval_gate_shf();
-        return;
-    }
-
-    
-    // if(GetGATE_MARMUX(CURRENT_LATCHES.MICROINSTRUCTION)){
-        // int marmux = GetMARMUX(CURRENT_LATCHES.MICROINSTRUCTION);
-        // if(marmux){
-        //     __uint16_t immediate = 0;
-        //     immediate = CURRENT_LATCHES.IR & 0x00FF;
-        //     immediate = immediate << 1;
-        //     BUS = Low16bits(immediate);
-        //     return;
-        // }
-        // int left_shift = GetLSHF1(CURRENT_LATCHES.MICROINSTRUCTION);
-        // __int16_t addr2_result = 0;
-        // __int16_t addr1_result = 0;
-        // switch(GetADDR2MUX(CURRENT_LATCHES.MICROINSTRUCTION)){
-        //     case 0:{
-        //         addr2_result = 0;
-        //         break;
-        //     }
-        //     case 1:{
-        //         addr2_result = CURRENT_LATCHES.IR & 0x003F;
-        //         addr2_result = sign_extend(addr2_result, 6);
-        //         addr2_result = Low16bits(addr2_result);
-        //         break; 
-        //     }
-        //     case 2:{
-        //         addr2_result = CURRENT_LATCHES.IR & 0x01FF;
-        //         addr2_result = sign_extend(addr2_result, 9);
-        //         addr2_result = Low16bits(addr2_result);
-        //         break;
-        //     }
-        //     case 3:{
-        //         addr2_result = CURRENT_LATCHES.IR & 0x07FF;
-        //         addr2_result = sign_extend(addr2_result, 12);
-        //         addr2_result = Low16bits(addr2_result);
-        //         break;
-        //     }
-        // }
-        // if(left_shift){
-        //     addr2_result = addr2_result << 1;
-        // }
-        // switch(GetADDR1MUX(CURRENT_LATCHES.MICROINSTRUCTION)){
-        //     case 0:{
-        //         addr1_result = CURRENT_LATCHES.PC;
-        //         addr1_result = Low16bits(addr1_result);
-        //         break;
-        //     }
-        //     case 1:{
-        //         int base_reg_idx = CURRENT_LATCHES.IR & 0x01C0;
-        //         base_reg_idx = base_reg_idx >> 6;
-        //         addr1_result = CURRENT_LATCHES.REGS[base_reg_idx];
-        //         addr1_result = Low16bits(addr1_result);
-        //         break;
-        //     }
-        // }
-        // BUS = Low16bits(addr1_result + addr2_result);
-    // }
-    // else if(GetGATE_ALU(CURRENT_LATCHES.MICROINSTRUCTION)){
-    //     int sr1 = 0;
-    //     int sr2 = 0;
-    //     int immediate = 0;
-    //     int aluk = GetALUK(CURRENT_LATCHES.MICROINSTRUCTION);
-    //     if(GetSR1MUX(CURRENT_LATCHES.MICROINSTRUCTION)){
-    //         sr1 = (CURRENT_LATCHES.IR & 0x01C0) >> 6;
-    //         if((CURRENT_LATCHES.IR & 0x0020) == 0){
-    //             sr2 = (CURRENT_LATCHES.IR & 0x0007);
-    //             int result = 0;
-    //             switch(aluk){
-    //                 case 0:{
-    //                     result = CURRENT_LATCHES.REGS[sr1] + CURRENT_LATCHES.REGS[sr2];
-    //                     result = Low16bits(result);
-    //                     BUS = result;
-    //                     break;
-    //                 }
-    //                 case 1:{
-    //                     result = CURRENT_LATCHES.REGS[sr1] & CURRENT_LATCHES.REGS[sr2];
-    //                     result = Low16bits(result);
-    //                     BUS = result;
-    //                     break;
-    //                 }
-    //                 case 2:{
-    //                     result = CURRENT_LATCHES.REGS[sr1] ^ CURRENT_LATCHES.REGS[sr2];
-    //                     result = Low16bits(result);
-    //                     BUS = result;
-    //                     break;
-    //                 }
-    //                 default:{
-    //                     printf("error in control code for ALUK");
-    //                     break;
-    //                 }
-    //         }
-    //         }else{
-    //             immediate = (CURRENT_LATCHES.IR & 0x001F);
-    //             immediate = sign_extend(immediate, 5);
-    //             int result = 0;
-    //                 switch(aluk){
-    //                     case 0:{
-    //                         result = CURRENT_LATCHES.REGS[sr1] + immediate;
-    //                         result = Low16bits(result);
-    //                         BUS = result;
-    //                         break;
-    //                     }
-    //                     case 1:{
-    //                         result = CURRENT_LATCHES.REGS[sr1] & immediate;
-    //                         result = Low16bits(result);
-    //                         BUS = result;
-    //                         break;
-    //                     }
-    //                     case 2:{
-    //                         result = CURRENT_LATCHES.REGS[sr1] ^ immediate;
-    //                         result = Low16bits(result);
-    //                         BUS = result;
-    //                         break;
-    //                     }
-    //                     default:{
-    //                         printf("error in control code for ALUK");
-    //                         break;
-    //                     }
-    //             }
-    //         }
-
-    //     }
-    //     else{
-    //         sr1 = (CURRENT_LATCHES.IR & 0x0E00) >> 9;
-    //         BUS = CURRENT_LATCHES.REGS[sr1];
-    //     }
-
-    // }
-    // else if(GetGATE_MDR(CURRENT_LATCHES.MICROINSTRUCTION)){
-    //     if((CURRENT_LATCHES.MAR & 0x1) == 1){
-    //         if(GetDATA_SIZE(CURRENT_LATCHES.MICROINSTRUCTION)==0){
-    //             int temp = sign_extend((CURRENT_LATCHES.MDR & 0xFF00) >> 8, 8);
-    //             BUS = Low16bits(temp);
-    //         }
-    //     }else{
-    //         if(GetDATA_SIZE(CURRENT_LATCHES.MICROINSTRUCTION)==0){
-    //             int temp = sign_extend(CURRENT_LATCHES.MDR & 0x00FF, 8);
-    //             BUS = Low16bits(temp);
-    //         }else{
-    //             BUS = Low16bits(CURRENT_LATCHES.MDR);
-    //         }
-    //     }
-    // }
-    // else if(GetGATE_PC(CURRENT_LATCHES.MICROINSTRUCTION)){
-
-    //     __uint8_t pc_mux = GetPCMUX(CURRENT_LATCHES.MICROINSTRUCTION);
-    //     int addr1_result = 0;
-    //     int addr2_result = 0;
-    //     if(pc_mux == 2 && GetDRMUX(CURRENT_LATCHES.MICROINSTRUCTION) != 1){
-    //         switch(GetADDR2MUX(CURRENT_LATCHES.MICROINSTRUCTION)){
-    //             case 0:{
-    //                 addr2_result = 0;
-    //                 break;
-    //             }
-    //             case 1:{
-    //                 addr2_result = CURRENT_LATCHES.IR & 0x003F;
-    //                 addr2_result = sign_extend(addr2_result, 6);
-    //                 addr2_result = Low16bits(addr2_result);
-    //                 break; 
-    //             }
-    //             case 2:{
-    //                 addr2_result = CURRENT_LATCHES.IR & 0x01FF;
-    //                 addr2_result = sign_extend(addr2_result, 9);
-    //                 addr2_result = Low16bits(addr2_result);
-    //                 break;
-    //             }
-    //             case 3:{
-    //                 addr2_result = CURRENT_LATCHES.IR & 0x07FF;
-    //                 addr2_result = sign_extend(addr2_result, 11);
-    //                 addr2_result = Low16bits(addr2_result);
-    //                 break;
-    //             }
-    //         }
-    //         if(GetLSHF1(CURRENT_LATCHES.MICROINSTRUCTION)==1){
-    //             addr2_result = addr2_result << 1;
-    //         }
-    //         switch(GetADDR1MUX(CURRENT_LATCHES.MICROINSTRUCTION)){
-    //             case 0:{
-    //                 addr1_result = CURRENT_LATCHES.PC;
-    //                 addr1_result = Low16bits(addr1_result);
-    //                 break;
-    //             }
-    //             case 1:{
-    //                 int base_reg_idx = CURRENT_LATCHES.IR & 0x01C0;
-    //                 base_reg_idx = base_reg_idx >> 6;
-    //                 addr1_result = CURRENT_LATCHES.REGS[base_reg_idx];
-    //                 addr1_result = Low16bits(addr1_result);
-    //                 break;
-    //             }
-    //         }
-    //         BUS = Low16bits(addr1_result + addr2_result);
-    //     }else{
-    //         BUS = Low16bits(CURRENT_LATCHES.PC);
-    //     }
-    // }
-    // else if(GetGATE_SHF(CURRENT_LATCHES.MICROINSTRUCTION)==1){
-    //     __uint16_t type_shift = CURRENT_LATCHES.IR & 0x0030;
-    //     type_shift = type_shift >> 4;
-    //     __uint8_t immediate = CURRENT_LATCHES.IR & 0x000F;
-    //     int sr1 = CURRENT_LATCHES.IR & 0x01C0;
-    //     sr1 = sr1 >> 6;
-    //     switch(type_shift){
-    //         case 0:{
-    //             __int16_t val = CURRENT_LATCHES.REGS[sr1] << immediate;
-    //             val = Low16bits(val);
-    //             BUS = val;
-    //             break;
-    //         }
-    //         case 1:{
-    //             __uint16_t val = CURRENT_LATCHES.REGS[sr1] >> immediate;
-    //             val = Low16bits(val);
-    //             BUS = val;
-    //             break;
-    //         }
-    //         case 3:{
-    //             __int16_t val = sign_extend(CURRENT_LATCHES.REGS[sr1],16) >> immediate;
-    //             val = Low16bits(val);
-    //             BUS = val;
-    //             BUS = Low16bits(BUS);
-    //             break;
-    //         }
-    //     }
-    // };
+    };
 }
 
 
